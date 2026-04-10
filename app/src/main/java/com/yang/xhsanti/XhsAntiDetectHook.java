@@ -263,6 +263,7 @@ public class XhsAntiDetectHook {
                 String.class, boolean.class, loadClassHook);
         } catch (Exception ignored) {}
 
+        // hka.c.a — 小红书混淆后的Xposed检测方法，始终返回false
         hookMethod(cl, "hka.c", "a", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
@@ -585,7 +586,7 @@ public class XhsAntiDetectHook {
         return sb.toString();
     }
 
-    static boolean isSensitivePkg(String pkg) {
+    private static boolean isSensitivePkg(String pkg) {
         if (pkg == null || pkg.isEmpty()) return false;
         String lower = pkg.toLowerCase();
         return lower.contains("xposed") ||
