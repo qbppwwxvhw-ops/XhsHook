@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -20,6 +21,19 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
 
     private static final String TAG = "XhsHook";
     private static final String TARGET_PKG = "com.xingin.xhs";
+    private static final long LOG_INTERVAL_MS = 1000L;
+
+    // 拦截计数器
+    private final AtomicLong vpnTransportCount = new AtomicLong(0);
+    private final AtomicLong vpnCapabilityCount = new AtomicLong(0);
+    private final AtomicLong vpnIfaceCount = new AtomicLong(0);
+    private final AtomicLong vpnNetworkInfoCount = new AtomicLong(0);
+
+    // 上次打印日志的时间戳
+    private final AtomicLong lastVpnTransportLogTime = new AtomicLong(0);
+    private final AtomicLong lastVpnCapabilityLogTime = new AtomicLong(0);
+    private final AtomicLong lastVpnIfaceLogTime = new AtomicLong(0);
+    private final AtomicLong lastVpnNetworkInfoLogTime = new AtomicLong(0);
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -126,7 +140,12 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                     protected void afterHookedMethod(MethodHookParam param) {
                         int transport = (int) param.args[0];
                         if (transport == 4) {
-                            XposedBridge.log(TAG + ": hasTransport(VPN) 拦截 → false");
+                            long count = vpnTransportCount.incrementAndGet();
+                            long now = System.currentTimeMillis();
+                            long prev = lastVpnTransportLogTime.get();
+                            if (now - prev >= LOG_INTERVAL_MS && lastVpnTransportLogTime.compareAndSet(prev, now)) {
+                                XposedBridge.log(TAG + ": hasTransport(VPN) 拦截 → false (已拦截 " + count + " 次)");
+                            }
                             param.setResult(false);
                         }
                     }
@@ -147,7 +166,12 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                     protected void afterHookedMethod(MethodHookParam param) {
                         int cap = (int) param.args[0];
                         if (cap == 15) {
-                            XposedBridge.log(TAG + ": hasCapability(NOT_VPN) 拦截 → true");
+                            long count = vpnCapabilityCount.incrementAndGet();
+                            long now = System.currentTimeMillis();
+                            long prev = lastVpnCapabilityLogTime.get();
+                            if (now - prev >= LOG_INTERVAL_MS && lastVpnCapabilityLogTime.compareAndSet(prev, now)) {
+                                XposedBridge.log(TAG + ": hasCapability(NOT_VPN) 拦截 → true (已拦截 " + count + " 次)");
+                            }
                             param.setResult(true);
                         }
                     }
@@ -181,7 +205,12 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                                     !name.equals("dummy0")) {
                                     filtered.add(ni);
                                 } else {
-                                    XposedBridge.log(TAG + ": 过滤VPN网卡: " + name);
+                                    long count = vpnIfaceCount.incrementAndGet();
+                                    long now = System.currentTimeMillis();
+                                    long prev = lastVpnIfaceLogTime.get();
+                                    if (now - prev >= LOG_INTERVAL_MS && lastVpnIfaceLogTime.compareAndSet(prev, now)) {
+                                        XposedBridge.log(TAG + ": 过滤VPN网卡: " + name + " (已过滤 " + count + " 次)");
+                                    }
                                 }
                             }
                             param.setResult(Collections.enumeration(filtered));
@@ -205,7 +234,12 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                         if (result instanceof NetworkInfo) {
                             NetworkInfo info = (NetworkInfo) result;
                             if (info.getType() == 17) {
-                                XposedBridge.log(TAG + ": getActiveNetworkInfo TYPE_VPN → null");
+                                long count = vpnNetworkInfoCount.incrementAndGet();
+                                long now = System.currentTimeMillis();
+                                long prev = lastVpnNetworkInfoLogTime.get();
+                                if (now - prev >= LOG_INTERVAL_MS && lastVpnNetworkInfoLogTime.compareAndSet(prev, now)) {
+                                    XposedBridge.log(TAG + ": getActiveNetworkInfo TYPE_VPN → null (已拦截 " + count + " 次)");
+                                }
                                 param.setResult(null);
                             }
                         }
