@@ -6,14 +6,13 @@ import android.net.NetworkInfo;
 import android.os.Build;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -26,8 +25,8 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
     private static final String TAG = "XhsHook";
     private static final String TARGET_PKG = "com.xingin.xhs";
 
-    /** 每条日志只打印一次，避免刷屏 */
-    private final Set<String> loggedOnce = new HashSet<>();
+    /** 每条日志只打印一次，避免刷屏（线程安全） */
+    private final Set<String> loggedOnce = ConcurrentHashMap.newKeySet();
 
     private void logOnce(String msg) {
         if (loggedOnce.add(msg)) {
@@ -331,8 +330,6 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
         return lower.equals("su") ||
                lower.startsWith("su ") ||
                lower.contains("which su") ||
-               lower.equals("id") ||
-               lower.startsWith("id ") ||
                lower.contains("/su/") ||
                lower.contains("/sbin/su") ||
                lower.contains("supersu") ||
@@ -343,8 +340,15 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
     // 系统属性检测
     // ================================================================
     private void hookSystemProperties() {
+        Class<?> sysPropClass;
         try {
-            Class<?> sysPropClass = Class.forName("android.os.SystemProperties");
+            sysPropClass = Class.forName("android.os.SystemProperties");
+        } catch (Exception e) {
+            XposedBridge.log(TAG + ": android.os.SystemProperties 类未找到 → " + e.getMessage());
+            return;
+        }
+
+        try {
             XposedHelpers.findAndHookMethod(
                 sysPropClass,
                 "get",
@@ -366,7 +370,6 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
         }
 
         try {
-            Class<?> sysPropClass = Class.forName("android.os.SystemProperties");
             XposedHelpers.findAndHookMethod(
                 sysPropClass,
                 "get",
@@ -484,12 +487,10 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
             setBuildField("TYPE", "user");
             // 修正 FINGERPRINT 中的 test-keys
             try {
-                Field fpField = Build.class.getField("FINGERPRINT");
-                fpField.setAccessible(true);
-                String fp = (String) fpField.get(null);
+                String fp = (String) XposedHelpers.getStaticObjectField(Build.class, "FINGERPRINT");
                 if (fp != null && fp.contains("test-keys")) {
                     String safeFp = fp.replace("test-keys", "release-keys");
-                    fpField.set(null, safeFp);
+                    XposedHelpers.setStaticObjectField(Build.class, "FINGERPRINT", safeFp);
                     XposedBridge.log(TAG + ": [修改] Build.FINGERPRINT test-keys → release-keys");
                 }
             } catch (Exception e) {
@@ -502,10 +503,8 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
 
     private void setBuildField(String fieldName, String value) {
         try {
-            Field field = Build.class.getField(fieldName);
-            field.setAccessible(true);
-            String current = (String) field.get(null);
-            field.set(null, value);
+            String current = (String) XposedHelpers.getStaticObjectField(Build.class, fieldName);
+            XposedHelpers.setStaticObjectField(Build.class, fieldName, value);
             XposedBridge.log(TAG + ": [修改] Build." + fieldName + " → " + value
                 + " (原值: " + current + ")");
         } catch (Exception e) {
