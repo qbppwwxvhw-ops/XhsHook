@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -20,6 +21,8 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
 
     private static final String TAG = "XhsHook";
     private static final String TARGET_PKG = "com.xingin.xhs";
+
+    private final AtomicBoolean vpnLoggedOnce = new AtomicBoolean(false);
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -37,28 +40,35 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
     // ================================================================
     private void hookCallJavaJniTest(ClassLoader cl) {
         final String CLASS = "com.xingin.a.a.f.jni.CallJavaJniTest";
+        Class<?> clazz;
+        try {
+            clazz = XposedHelpers.findClass(CLASS, cl);
+        } catch (XposedHelpers.ClassNotFoundError e) {
+            XposedBridge.log(TAG + ": [跳过] 类不存在于当前版本 → " + CLASS);
+            return;
+        }
 
         // Xposed 检测
-        hookReturn(cl, CLASS, "existXposed", false);
-        hookReturn(cl, CLASS, "getCheckingXposedResult", 0);
-        hookReturn(cl, CLASS, "getCheckingVirtualAppResult", 0);
+        hookClassReturn(clazz, "existXposed", false);
+        hookClassReturn(clazz, "getCheckingXposedResult", 0);
+        hookClassReturn(clazz, "getCheckingVirtualAppResult", 0);
 
         // 无障碍检测
-        hookReturn(cl, CLASS, "getAccessibilityStatus", 0);
-        hookReturn(cl, CLASS, "getEnabledAccessibilityServices", "");
+        hookClassReturn(clazz, "getAccessibilityStatus", 0);
+        hookClassReturn(clazz, "getEnabledAccessibilityServices", "");
 
         // 进程枚举
-        hookReturn(cl, CLASS, "getRunningProcessListByCommand", new ArrayList<String>());
-        hookReturn(cl, CLASS, "getRunningProcessListBySdkApi", new ArrayList<String>());
+        hookClassReturn(clazz, "getRunningProcessListByCommand", new ArrayList<String>());
+        hookClassReturn(clazz, "getRunningProcessListBySdkApi", new ArrayList<String>());
 
         // 隐藏应用列表
-        hookReturn(cl, CLASS, "getSecretAppList", new ArrayList<String>());
+        hookClassReturn(clazz, "getSecretAppList", new ArrayList<String>());
 
         // 开发者选项
-        hookReturn(cl, CLASS, "devOpenedCount", 0);
+        hookClassReturn(clazz, "devOpenedCount", 0);
 
         // 安装列表过滤
-        hookMethod(cl, CLASS, "getInstallApps", new XC_MethodHook() {
+        hookClassMethod(clazz, "getInstallApps", new XC_MethodHook() {
             @Override
             @SuppressWarnings("unchecked")
             protected void afterHookedMethod(MethodHookParam param) {
@@ -77,11 +87,18 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
     // ================================================================
     private void hookNativeGatherTest(ClassLoader cl) {
         final String CLASS = "com.xingin.a.a.f.jni.NativeGatherTest";
+        Class<?> clazz;
+        try {
+            clazz = XposedHelpers.findClass(CLASS, cl);
+        } catch (XposedHelpers.ClassNotFoundError e) {
+            XposedBridge.log(TAG + ": [跳过] 类不存在于当前版本 → " + CLASS);
+            return;
+        }
 
-        hookReturn(cl, CLASS, "isRoot", false);
-        hookReturn(cl, CLASS, "isPtrace", false);
+        hookClassReturn(clazz, "isRoot", false);
+        hookClassReturn(clazz, "isPtrace", false);
 
-        hookMethod(cl, CLASS, "mapsInfo", new XC_MethodHook() {
+        hookClassMethod(clazz, "mapsInfo", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
                 Object result = param.getResult();
@@ -91,7 +108,7 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
             }
         });
 
-        hookMethod(cl, CLASS, "getProcessName", new XC_MethodHook() {
+        hookClassMethod(clazz, "getProcessName", new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) {
                 Object result = param.getResult();
@@ -107,8 +124,16 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
     // ================================================================
     private void hookBasicJniTest(ClassLoader cl) {
         final String CLASS = "com.xingin.a.a.f.jni.BasicJniTest";
-        hookReturn(cl, CLASS, "isDebugAble", false);
-        hookReturn(cl, CLASS, "getBuildIsEmulator", false);
+        Class<?> clazz;
+        try {
+            clazz = XposedHelpers.findClass(CLASS, cl);
+        } catch (XposedHelpers.ClassNotFoundError e) {
+            XposedBridge.log(TAG + ": [跳过] 类不存在于当前版本 → " + CLASS);
+            return;
+        }
+
+        hookClassReturn(clazz, "isDebugAble", false);
+        hookClassReturn(clazz, "getBuildIsEmulator", false);
     }
 
     // ================================================================
@@ -126,7 +151,9 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                     protected void afterHookedMethod(MethodHookParam param) {
                         int transport = (int) param.args[0];
                         if (transport == 4) {
-                            XposedBridge.log(TAG + ": hasTransport(VPN) 拦截 → false");
+                            if (vpnLoggedOnce.compareAndSet(false, true)) {
+                                XposedBridge.log(TAG + ": hasTransport(VPN) 拦截 → false");
+                            }
                             param.setResult(false);
                         }
                     }
@@ -220,6 +247,30 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
     // ================================================================
     // 工具方法
     // ================================================================
+
+    /** 对已解析的 clazz 执行单次类查找后的 hookReturn，避免重复 findClass */
+    private void hookClassReturn(Class<?> clazz,
+                                 String methodName, final Object returnValue) {
+        hookClassMethod(clazz, methodName, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) {
+                param.setResult(returnValue);
+            }
+        });
+    }
+
+    /** 对已解析的 clazz 执行 hook，不再重复调用 findClass */
+    private void hookClassMethod(Class<?> clazz,
+                                 String methodName, XC_MethodHook hook) {
+        try {
+            XposedBridge.hookAllMethods(clazz, methodName, hook);
+            XposedBridge.log(TAG + ": Hook成功 → " + clazz.getName() + "." + methodName);
+        } catch (Exception e) {
+            XposedBridge.log(TAG + ": Hook失败 → " + clazz.getName() + "." + methodName
+                + " : " + e.getMessage());
+        }
+    }
+
     private void hookReturn(ClassLoader cl, String className,
                             String methodName, final Object returnValue) {
         hookMethod(cl, className, methodName, new XC_MethodHook() {
