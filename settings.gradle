@@ -1,2 +1,3 @@
 rootProject.name = "XhsHook"
 include ':app'
+include ':xhsanti'
