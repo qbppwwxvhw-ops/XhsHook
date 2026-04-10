@@ -126,7 +126,6 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                     protected void afterHookedMethod(MethodHookParam param) {
                         int transport = (int) param.args[0];
                         if (transport == 4) {
-                            XposedBridge.log(TAG + ": hasTransport(VPN) 拦截 → false");
                             param.setResult(false);
                         }
                     }
@@ -147,7 +146,6 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                     protected void afterHookedMethod(MethodHookParam param) {
                         int cap = (int) param.args[0];
                         if (cap == 15) {
-                            XposedBridge.log(TAG + ": hasCapability(NOT_VPN) 拦截 → true");
                             param.setResult(true);
                         }
                     }
@@ -180,8 +178,6 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                                     !name.startsWith("vpn") &&
                                     !name.equals("dummy0")) {
                                     filtered.add(ni);
-                                } else {
-                                    XposedBridge.log(TAG + ": 过滤VPN网卡: " + name);
                                 }
                             }
                             param.setResult(Collections.enumeration(filtered));
@@ -205,7 +201,6 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
                         if (result instanceof NetworkInfo) {
                             NetworkInfo info = (NetworkInfo) result;
                             if (info.getType() == 17) {
-                                XposedBridge.log(TAG + ": getActiveNetworkInfo TYPE_VPN → null");
                                 param.setResult(null);
                             }
                         }
