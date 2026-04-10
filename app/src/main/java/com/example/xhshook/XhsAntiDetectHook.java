@@ -24,16 +24,16 @@ public class XhsAntiDetectHook implements IXposedHookLoadPackage {
     private static final long LOG_INTERVAL_MS = 1000L;
 
     // 拦截计数器
-    private final AtomicLong vpnTransportCount = new AtomicLong(0);
-    private final AtomicLong vpnCapabilityCount = new AtomicLong(0);
-    private final AtomicLong vpnIfaceCount = new AtomicLong(0);
-    private final AtomicLong vpnNetworkInfoCount = new AtomicLong(0);
+    private static final AtomicLong vpnTransportCount = new AtomicLong(0);
+    private static final AtomicLong vpnCapabilityCount = new AtomicLong(0);
+    private static final AtomicLong vpnIfaceCount = new AtomicLong(0);
+    private static final AtomicLong vpnNetworkInfoCount = new AtomicLong(0);
 
     // 上次打印日志的时间戳
-    private final AtomicLong lastVpnTransportLogTime = new AtomicLong(0);
-    private final AtomicLong lastVpnCapabilityLogTime = new AtomicLong(0);
-    private final AtomicLong lastVpnIfaceLogTime = new AtomicLong(0);
-    private final AtomicLong lastVpnNetworkInfoLogTime = new AtomicLong(0);
+    private static final AtomicLong lastVpnTransportLogTime = new AtomicLong(0);
+    private static final AtomicLong lastVpnCapabilityLogTime = new AtomicLong(0);
+    private static final AtomicLong lastVpnIfaceLogTime = new AtomicLong(0);
+    private static final AtomicLong lastVpnNetworkInfoLogTime = new AtomicLong(0);
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
